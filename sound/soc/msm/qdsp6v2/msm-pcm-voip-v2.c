@@ -814,7 +814,17 @@ static int msm_pcm_playback_copy(struct snd_pcm_substream *substream, int a,
 			if (prtd->mode == MODE_PCM) {
 				ret = copy_from_user(&buf_node->frame.voc_pkt,
 							buf, count);
+				if (ret) {
+					pr_err("%s: copy from user failed %d\n",
+					       __func__, ret);
+					return -EFAULT;
+				}
 				buf_node->frame.pktlen = count;
+				if (ret) {
+					pr_err("%s: copy from user failed %d\n",
+					       __func__, ret);
+					return -EFAULT;
+				}
 			} else {
 				ret = copy_from_user(&buf_node->frame,
 							buf, count);
@@ -822,11 +832,6 @@ static int msm_pcm_playback_copy(struct snd_pcm_substream *substream, int a,
 					buf_node->frame.pktlen = count -
 					(sizeof(buf_node->frame.frm_hdr) +
 					 sizeof(buf_node->frame.pktlen));
-			}
-			if (ret) {
-				pr_err("%s: copy from user failed %d\n",
-				       __func__, ret);
-				return -EFAULT;
 			}
 			spin_lock_irqsave(&prtd->dsp_lock, dsp_flags);
 			list_add_tail(&buf_node->list, &prtd->in_queue);
