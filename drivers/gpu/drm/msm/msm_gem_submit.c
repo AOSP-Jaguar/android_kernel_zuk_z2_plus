@@ -34,50 +34,6 @@ static inline void __user *to_user_ptr(u64 address)
 }
 
 static struct msm_gem_submit *submit_create(struct drm_device *dev,
-		struct msm_gpu *gpu, int nr)
-{
-	struct msm_gem_submit *submit;
-	int sz = sizeof(*submit) + (nr * sizeof(submit->bos[0]));
-
-	submit = kmalloc(sz, GFP_TEMPORARY | __GFP_NOWARN | __GFP_NORETRY);
-	if (submit) {
-		submit->dev = dev;
-/*
- * Copyright (C) 2013 Red Hat
- * Author: Rob Clark <robdclark@gmail.com>
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published by
- * the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- * more details.
- *
- * You should have received a copy of the GNU General Public License along with
- * this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#include "msm_drv.h"
-#include "msm_gpu.h"
-#include "msm_gem.h"
-
-/*
- * Cmdstream submission:
- */
-
-/* make sure these don't conflict w/ MSM_SUBMIT_BO_x */
-#define BO_VALID    0x8000
-#define BO_LOCKED   0x4000
-#define BO_PINNED   0x2000
-
-static inline void __user *to_user_ptr(u64 address)
-{
-	return (void __user *)(uintptr_t)address;
-}
-
-static struct msm_gem_submit *submit_create(struct drm_device *dev,
 		struct msm_gpu *gpu, uint32_t nr_cmds, uint32_t)
 {
 	struct msm_gem_submit *submit;
