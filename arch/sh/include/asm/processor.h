@@ -1,184 +1,175 @@
-#ifndef __ASM_SH_PROCESSOR_H
-#define __ASM_SH_PROCESSOR_H
-
-#include <asm/cpu-features.h>
-#include <asm/segment.h>
-#include <asm/cache.h>
-
-#ifndef __ASSEMBLY__
 /*
- *  CPU type and hardware bug flags. Kept separately for each CPU.
+ * Based on arch/arm/include/asm/processor.h
  *
- *  Each one of these also needs a CONFIG_CPU_SUBTYPE_xxx entry
- *  in arch/sh/mm/Kconfig, as well as an entry in arch/sh/kernel/setup.c
- *  for parsing the subtype in get_cpu_subtype().
+ * Copyright (C) 1995-1999 Russell King
+ * Copyright (C) 2012 ARM Ltd.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-enum cpu_type {
-	/* SH-2 types */
-	CPU_SH7619,
-
-	/* SH-2A types */
-	CPU_SH7201, CPU_SH7203, CPU_SH7206, CPU_SH7263, CPU_SH7264, CPU_SH7269,
-	CPU_MXG,
-
-	/* SH-3 types */
-	CPU_SH7705, CPU_SH7706, CPU_SH7707,
-	CPU_SH7708, CPU_SH7708S, CPU_SH7708R,
-	CPU_SH7709, CPU_SH7709A, CPU_SH7710, CPU_SH7712,
-	CPU_SH7720, CPU_SH7721, CPU_SH7729,
-
-	/* SH-4 types */
-	CPU_SH7750, CPU_SH7750S, CPU_SH7750R, CPU_SH7751, CPU_SH7751R,
-	CPU_SH7760, CPU_SH4_202, CPU_SH4_501,
-
-	/* SH-4A types */
-	CPU_SH7763, CPU_SH7770, CPU_SH7780, CPU_SH7781, CPU_SH7785, CPU_SH7786,
-	CPU_SH7723, CPU_SH7724, CPU_SH7757, CPU_SH7734, CPU_SHX3,
-
-	/* SH4AL-DSP types */
-	CPU_SH7343, CPU_SH7722, CPU_SH7366, CPU_SH7372,
-
-	/* SH-5 types */
-        CPU_SH5_101, CPU_SH5_103,
-
-	/* Unknown subtype */
-	CPU_SH_NONE
-};
-
-enum cpu_family {
-	CPU_FAMILY_SH2,
-	CPU_FAMILY_SH2A,
-	CPU_FAMILY_SH3,
-	CPU_FAMILY_SH4,
-	CPU_FAMILY_SH4A,
-	CPU_FAMILY_SH4AL_DSP,
-	CPU_FAMILY_SH5,
-	CPU_FAMILY_UNKNOWN,
-};
+#ifndef __ASM_PROCESSOR_H
+#define __ASM_PROCESSOR_H
 
 /*
- * TLB information structure
- *
- * Defined for both I and D tlb, per-processor.
+ * Default implementation of macro that returns current
+ * instruction pointer ("program counter").
  */
-struct tlb_info {
-	unsigned long long next;
-	unsigned long long first;
-	unsigned long long last;
+#define current_text_addr() ({ __label__ _l; _l: &&_l;})
 
-	unsigned int entries;
-	unsigned int step;
+#ifdef __KERNEL__
 
-	unsigned long flags;
+#include <linux/string.h>
+
+#include <asm/fpsimd.h>
+#include <asm/hw_breakpoint.h>
+#include <asm/pgtable-hwdef.h>
+#include <asm/ptrace.h>
+#include <asm/types.h>
+
+#ifdef __KERNEL__
+#define STACK_TOP_MAX		TASK_SIZE_64
+#ifdef CONFIG_COMPAT
+#define AARCH32_VECTORS_BASE	0xffff0000
+#define STACK_TOP		(test_thread_flag(TIF_32BIT) ? \
+				AARCH32_VECTORS_BASE : STACK_TOP_MAX)
+#else
+#define STACK_TOP		STACK_TOP_MAX
+#endif /* CONFIG_COMPAT */
+
+#define ARCH_LOW_ADDRESS_LIMIT	PHYS_MASK
+#endif /* __KERNEL__ */
+
+extern unsigned int boot_reason;
+extern unsigned int cold_boot;
+
+struct debug_info {
+	/* Have we suspended stepping by a debugger? */
+	int			suspended_step;
+	/* Allow breakpoints and watchpoints to be disabled for this thread. */
+	int			bps_disabled;
+	int			wps_disabled;
+	/* Hardware breakpoints pinned to this task. */
+	struct perf_event	*hbp_break[ARM_MAX_BRP];
+	struct perf_event	*hbp_watch[ARM_MAX_WRP];
 };
 
-struct sh_cpuinfo {
-	unsigned int type, family;
-	int cut_major, cut_minor;
-	unsigned long loops_per_jiffy;
-	unsigned long asid_cache;
+struct cpu_context {
+	unsigned long x19;
+	unsigned long x20;
+	unsigned long x21;
+	unsigned long x22;
+	unsigned long x23;
+	unsigned long x24;
+	unsigned long x25;
+	unsigned long x26;
+	unsigned long x27;
+	unsigned long x28;
+	unsigned long fp;
+	unsigned long sp;
+	unsigned long pc;
+};
 
-	struct cache_info icache;	/* Primary I-cache */
-	struct cache_info dcache;	/* Primary D-cache */
-	struct cache_info scache;	/* Secondary cache */
+struct thread_struct {
+	struct cpu_context	cpu_context;	/* cpu context */
+	unsigned long		tp_value;
+	struct fpsimd_state	fpsimd_state;
+	unsigned long		fault_address;	/* fault info */
+	unsigned long		fault_code;	/* ESR_EL1 value */
+	struct debug_info	debug;		/* debugging */
+};
 
-	/* TLB info */
-	struct tlb_info itlb;
-	struct tlb_info dtlb;
+#define INIT_THREAD  {	}
 
-	unsigned int phys_bits;
-	unsigned long flags;
-} __attribute__ ((aligned(L1_CACHE_BYTES)));
+static inline void start_thread_common(struct pt_regs *regs, unsigned long pc)
+{
+	memset(regs, 0, sizeof(*regs));
+	regs->syscallno = ~0UL;
+	regs->pc = pc;
+}
 
-extern struct sh_cpuinfo cpu_data[];
-#define boot_cpu_data cpu_data[0]
-#define current_cpu_data cpu_data[smp_processor_id()]
-#define raw_current_cpu_data cpu_data[raw_smp_processor_id()]
+static inline void start_thread(struct pt_regs *regs, unsigned long pc,
+				unsigned long sp)
+{
+	start_thread_common(regs, pc);
+	regs->pstate = PSR_MODE_EL0t;
+	regs->sp = sp;
+}
 
-#define cpu_sleep()	__asm__ __volatile__ ("sleep" : : : "memory")
-#define cpu_relax()	barrier()
-#define cpu_relax_lowlatency() cpu_relax()
+#ifdef CONFIG_COMPAT
+static inline void compat_start_thread(struct pt_regs *regs, unsigned long pc,
+				       unsigned long sp)
+{
+	start_thread_common(regs, pc);
+	regs->pstate = COMPAT_PSR_MODE_USR;
+	if (pc & 1)
+		regs->pstate |= COMPAT_PSR_T_BIT;
 
-void default_idle(void);
-void stop_this_cpu(void *);
+#ifdef __AARCH64EB__
+	regs->pstate |= COMPAT_PSR_E_BIT;
+#endif
 
-/* Forward decl */
-struct seq_operations;
+	regs->compat_sp = sp;
+}
+#endif
+
+/* Forward declaration, a strange C thing */
 struct task_struct;
 
-extern struct pt_regs fake_swapper_regs;
+/* Free all resources held by a thread. */
+extern void release_thread(struct task_struct *);
 
-extern void cpu_init(void);
-extern void cpu_probe(void);
+/* Prepare to copy thread state - unlazy all lazy status */
+#define prepare_to_copy(tsk)	do { } while (0)
 
-/* arch/sh/kernel/process.c */
-extern unsigned int xstate_size;
-extern void free_thread_xstate(struct task_struct *);
-extern struct kmem_cache *task_xstate_cachep;
+unsigned long get_wchan(struct task_struct *p);
 
-/* arch/sh/mm/alignment.c */
-extern int get_unalign_ctl(struct task_struct *, unsigned long addr);
-extern int set_unalign_ctl(struct task_struct *, unsigned int val);
+#define cpu_relax()			barrier()
+#define cpu_relax_lowlatency()                cpu_relax()
 
-#define GET_UNALIGN_CTL(tsk, addr)	get_unalign_ctl((tsk), (addr))
-#define SET_UNALIGN_CTL(tsk, val)	set_unalign_ctl((tsk), (val))
+/* Thread switching */
+extern struct task_struct *cpu_switch_to(struct task_struct *prev,
+					 struct task_struct *next);
 
-/* arch/sh/mm/init.c */
-extern unsigned int mem_init_done;
+#define task_pt_regs(p) \
+	((struct pt_regs *)(THREAD_START_SP + task_stack_page(p)) - 1)
 
-/* arch/sh/kernel/setup.c */
-const char *get_cpu_subtype(struct sh_cpuinfo *c);
-extern const struct seq_operations cpuinfo_op;
-
-/* thread_struct flags */
-#define SH_THREAD_UAC_NOPRINT	(1 << 0)
-#define SH_THREAD_UAC_SIGBUS	(1 << 1)
-#define SH_THREAD_UAC_MASK	(SH_THREAD_UAC_NOPRINT | SH_THREAD_UAC_SIGBUS)
-
-/* processor boot mode configuration */
-#define MODE_PIN0 (1 << 0)
-#define MODE_PIN1 (1 << 1)
-#define MODE_PIN2 (1 << 2)
-#define MODE_PIN3 (1 << 3)
-#define MODE_PIN4 (1 << 4)
-#define MODE_PIN5 (1 << 5)
-#define MODE_PIN6 (1 << 6)
-#define MODE_PIN7 (1 << 7)
-#define MODE_PIN8 (1 << 8)
-#define MODE_PIN9 (1 << 9)
-#define MODE_PIN10 (1 << 10)
-#define MODE_PIN11 (1 << 11)
-#define MODE_PIN12 (1 << 12)
-#define MODE_PIN13 (1 << 13)
-#define MODE_PIN14 (1 << 14)
-#define MODE_PIN15 (1 << 15)
-
-int generic_mode_pins(void);
-int test_mode_pin(int pin);
-
-#ifdef CONFIG_VSYSCALL
-int vsyscall_init(void);
-#else
-#define vsyscall_init() do { } while (0)
-#endif
+#define KSTK_EIP(tsk)	((unsigned long)task_pt_regs(tsk)->pc)
+#define KSTK_ESP(tsk)	user_stack_pointer(task_pt_regs(tsk))
 
 /*
- * SH-2A has both 16 and 32-bit opcodes, do lame encoding checks.
+ * Prefetching support
  */
-#ifdef CONFIG_CPU_SH2A
-extern unsigned int instruction_size(unsigned int insn);
-#elif defined(CONFIG_SUPERH32)
-#define instruction_size(insn)	(2)
-#else
-#define instruction_size(insn)	(4)
+#define ARCH_HAS_PREFETCH
+static inline void prefetch(const void *ptr)
+{
+	asm volatile("prfm pldl1keep, %a0\n" : : "p" (ptr));
+}
+
+#define ARCH_HAS_PREFETCHW
+static inline void prefetchw(const void *ptr)
+{
+	asm volatile("prfm pstl1keep, %a0\n" : : "p" (ptr));
+}
+
+#define ARCH_HAS_SPINLOCK_PREFETCH
+static inline void spin_lock_prefetch(const void *x)
+{
+	prefetchw(x);
+}
+
+#define HAVE_ARCH_PICK_MMAP_LAYOUT
+
 #endif
 
-#endif /* __ASSEMBLY__ */
+void cpu_enable_pan(void);
 
-#ifdef CONFIG_SUPERH32
-# include <asm/processor_32.h>
-#else
-# include <asm/processor_64.h>
-#endif
-
-#endif /* __ASM_SH_PROCESSOR_H */
+#endif /* __ASM_PROCESSOR_H */
