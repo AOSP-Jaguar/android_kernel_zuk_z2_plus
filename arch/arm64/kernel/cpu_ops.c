@@ -75,3 +75,4 @@ void __init cpu_read_bootcpu_ops(void)
 	}
 	cpu_read_ops(dn, 0);
 }
+
