@@ -26,7 +26,6 @@
 #include <linux/export.h>
 #include <linux/bug.h>
 #include <linux/errno.h>
-#include <linux/memcopy.h>
 
 #ifndef __HAVE_ARCH_STRNCASECMP
 /**
@@ -627,11 +626,11 @@ EXPORT_SYMBOL(memzero_explicit);
  */
 void *memcpy(void *dest, const void *src, size_t count)
 {
-	unsigned long dstp = (unsigned long)dest;
-	unsigned long srcp = (unsigned long)src;
+	char *tmp = dest;
+	const char *s = src;
 
-	/* Copy from the beginning to the end */
-	mem_copy_fwd(dstp, srcp, count);
+	while (count--)
+		*tmp++ = *s++;
 	return dest;
 }
 EXPORT_SYMBOL(memcpy);
@@ -648,15 +647,21 @@ EXPORT_SYMBOL(memcpy);
  */
 void *memmove(void *dest, const void *src, size_t count)
 {
-	unsigned long dstp = (unsigned long)dest;
-	unsigned long srcp = (unsigned long)src;
+	char *tmp;
+	const char *s;
 
-	if (dest - src >= count) {
-		/* Copy from the beginning to the end */
-		mem_copy_fwd(dstp, srcp, count);
+	if (dest <= src) {
+		tmp = dest;
+		s = src;
+		while (count--)
+			*tmp++ = *s++;
 	} else {
-		/* Copy from the end to the beginning */
-		mem_copy_bwd(dstp, srcp, count);
+		tmp = dest;
+		tmp += count;
+		s = src;
+		s += count;
+		while (count--)
+			*--tmp = *--s;
 	}
 	return dest;
 }
@@ -864,3 +869,11 @@ char *strreplace(char *s, char old, char new)
 	return s;
 }
 EXPORT_SYMBOL(strreplace);
+
+
+void fortify_panic(const char *name)
+{
+	pr_emerg("detected buffer overflow in %s\n", name);
+	BUG();
+}
+EXPORT_SYMBOL(fortify_panic);
